@@ -1,0 +1,47 @@
+name: Selenium tests
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  selenium:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+
+      - name: Install dependencies
+        run: python -m pip install -r requirements.txt
+
+      - name: Check Chrome availability
+        run: |
+          google-chrome --version
+          which chromedriver || true
+
+      - name: Start F-Bank
+        run: |
+          python -m http.server 8000 --bind 127.0.0.1 --directory dist > /tmp/fbank-http.log 2>&1 &
+          for i in {1..30}; do
+            if curl --fail --silent 'http://127.0.0.1:8000/?balance=30000&reserved=20001' > /dev/null; then
+              exit 0
+            fi
+            sleep 1
+          done
+          cat /tmp/fbank-http.log
+          exit 1
+
+      - name: Run Selenium tests
+        env:
+          BASE_URL: http://127.0.0.1:8000
+          HEADLESS: '1'
+        run: python -m pytest -v
